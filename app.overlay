@@ -1,3 +1,23 @@
 &temp {
 	status = "okay"; 
 };
+
+
+&pinctrl {
+	/*Assign pins to i2s so we can use mic*/
+	i2s0_default_alt: i2s0_default_alt {
+		group1 {
+			psels = <NRF_PSEL(I2S_SCK_M, 0, 29)>,
+				<NRF_PSEL(I2S_LRCK_M, 0, 31)>,
+				<NRF_PSEL(I2S_SDIN, 0, 02)>;
+		};
+	};
+};
+
+
+/*Activate the i2s peripheral by setting status to ok*/
+&i2s0{
+	status = "okay";
+	pinctrl-0 = <&i2s0_default_alt>;
+	pinctrl-names = "default";
+};
