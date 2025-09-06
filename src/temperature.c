@@ -6,7 +6,7 @@
 #include "app.h"
 #include "temperature.h"
 
-LOG_MODULE_REGISTER(sensor_module);
+LOG_MODULE_REGISTER(temperature_module);
 
 extern struct k_msgq tempmsgq;
 
@@ -49,11 +49,10 @@ double fetch_temp(const struct device *sensor) {
 void temp_sensor_thread(void *arg1 , void *arg2, void *arg3) 
 {
 	while(1) {
-		
+		/*Check the temp sense gate before running*/
 		float curr_temp = (float)fetch_temp(temp_sensor); 
 		curr_msg.value  = curr_temp;
 
-		LOG_WRN("Reading temp normal\n");
 		/*Push the work  into the queue*/
 		if (k_msgq_put(&tempmsgq, &curr_msg, K_NO_WAIT) != 0) {
 			//Queue is full here  drop the oldest 

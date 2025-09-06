@@ -1,3 +1,4 @@
+#include "zephyr/bluetooth/conn.h"
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/gatt.h>
 #include <zephyr/bluetooth/uuid.h>
@@ -6,8 +7,10 @@ LOG_MODULE_REGISTER(ble_module);
 
 #include "app.h"
 #include "ble_service.h"
+#include "fsm_service.h"
 
 
+extern struct state_object state_object;
 extern struct k_msgq tempmsgq;
 
 volatile bool ble_ready = false;
@@ -62,13 +65,48 @@ ssize_t read_custom_characteristic(struct bt_conn *conn,
   return bt_gatt_attr_read(conn, attr, buf, len, offset, value, sizeof(*value));
 }
 
+/* COnnection Callbacks*/
+static void connected(struct bt_conn *conn, uint8_t err) {
+	if(err != 0) {
+		LOG_ERR("Error occured when connecting (%d)", err);
+		/* Should we die */
+	}
+	LOG_WRN("Connection estalished!"); 
+	/* Post an Event to FSM to show connected*/
+	fsm_post_event(EVENT_CENTRAL_CONNECTED);
+}
+
+static void disconnected(struct bt_conn *conn, uint8_t err) {
+	if(err != 0) {
+		LOG_ERR("Error occured when disconnecting (%d)", err); 
+		/*Should we die?*/
+	}
+	LOG_WRN("Disconnection finished");
+	/*Post an event to the FSM that we are disconnected*/
+	fsm_post_event(EVENT_CENTRAL_DISCONNECTED);
+}
+
+static struct bt_conn_cb our_callbacks = {
+	.connected = connected, 
+	.disconnected = disconnected,
+};
+
+
 void ble_service_init(void) {
   int err;
+
   /*Initialize BLE and wait until it is done*/
   err = bt_enable(bt_ready);
   while (!ble_ready) {
     LOG_WRN("bt not ready!");
     k_msleep(100);
+  }
+
+  /* Register  connection callbacks*/
+  err = bt_conn_cb_register(&our_callbacks);
+  if (err != 0U ) {
+	  LOG_ERR("Connection callbacks could not be registered");
+	  /* how to handle failure*/
   }
 
   /*Low Power advertising params*/
