@@ -10,6 +10,30 @@ LOG_MODULE_REGISTER(audio_module);
 K_MEM_SLAB_DEFINE_STATIC(mem_slab, BLOCK_SIZE, BLOCK_COUNT, 4);
 
 static const struct device *i2s_dev;
+static bool hysteresis_state = false;
+
+/*A structure storing hysteresis levels*/
+struct hysteresis{
+    float low;
+    float high;
+};
+
+/*Values for testing*/
+static const struct hysteresis h = {.low = 0.000483, .high = 0.000524};
+
+/**
+ * This function implements a simple hysteresis mechanism. It prevents frequent
+ * toggling of a boolean state when the input value fluctuates around threshold values.
+ */
+static bool check_hysteresis(float value, const struct hysteresis *h, bool prev_state) {
+	if (value < h->low) {
+		return false; // turn OFF
+	} else if (value > h->high) {
+		return true; // turn ON
+	} else {
+		return prev_state; // retain previous state
+	}
+}
 
 void audio_service_init()
 {
@@ -64,8 +88,9 @@ void audio_sense_thread(void *arg1, void *arg2, void *arg3)
 				/*Compute the RMS of the signals in the block*/
 				arm_rms_q31((q31_t *)samples, 4410, &rms_q31);
 				float rms_float = (float)rms_q31 / 2147483648.0f;
-				// to avoid unused error
-				(void)rms_float;
+				/*Verify the hysteresis*/
+				hysteresis_state = check_hysteresis(rms_float, &h, hysteresis_state);
+				LOG_WRN("Hysteresis state: %s\n", hysteresis_state ? "ON" : "OFF");
 				k_mem_slab_free(&mem_slab, (void *)mem_block);
 			}
 
