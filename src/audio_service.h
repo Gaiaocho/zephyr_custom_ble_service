@@ -19,6 +19,11 @@
 /*Enough for 400ms of sound*/
 #define BLOCK_COUNT		(INITIAL_BLOCK_COUNT + 3)
 
+
+/*Filter  Definitions*/
+#define NUM_TAPS			53
+
+
 void audio_service_init();
 void audio_sense_thread(void *arg1, void *arg2, void *arg3);
 #endif
