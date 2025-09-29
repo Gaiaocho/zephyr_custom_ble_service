@@ -9,8 +9,10 @@
 /*24 Bits packed into a 32 bit block*/
 #define BYTES_PER_SAMPLE 	sizeof(int32_t)
 #define NUMBER_OF_CHANNELS 	1
-/*4410 samples so 0.1s*/
-#define SAMPLES_PER_BLOCK 	((SAMPLE_FREQUENCY / 10) * NUMBER_OF_CHANNELS)
+/*4410 samples so 0.1s
+ * Swapped to 4096 because our FFT implementation demands that.
+ * */
+#define SAMPLES_PER_BLOCK 	4096 //((SAMPLE_FREQUENCY / 10) * NUMBER_OF_CHANNELS)
 #define INITIAL_BLOCK_COUNT 	1
 #define TIMEOUT_MS 		2000
 
@@ -18,6 +20,13 @@
 #define BLOCK_SIZE 		(BYTES_PER_SAMPLE * SAMPLES_PER_BLOCK) 
 /*Enough for 400ms of sound*/
 #define BLOCK_COUNT		(INITIAL_BLOCK_COUNT + 3)
+
+
+/*Filter  Definitions*/
+#define NUM_TAPS			53
+
+extern struct k_mem_slab inference_slab;
+extern struct k_fifo infer_fifo; 
 
 void audio_service_init();
 void audio_sense_thread(void *arg1, void *arg2, void *arg3);

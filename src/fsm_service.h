@@ -8,9 +8,14 @@
 #define EVENT_AUDIO_DETECTED       BIT(2)
 #define EVENT_ERROR_OCCURED        BIT(3)
 #define EVENT_CENTRAL_DISCONNECTED BIT(4)
+#define EVENT_AUD_SENSE_STARTED    BIT(5)
+#define EVENT_AUD_SENSE_END	   BIT(6)
+#define EVENT_INFERENCE_START	   BIT(7)
+#define EVENT_INFERENCE_END 	   BIT(8)
 
 extern struct k_sem temp_sense_gate;
 extern struct k_sem mic_sense_gate;
+extern struct k_sem inference_gate;
 
 /*End List Events & gates*/
 void fsm_init(void);

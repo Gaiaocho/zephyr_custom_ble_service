@@ -9,6 +9,7 @@ LOG_MODULE_REGISTER(fsm_module);
 /*App Gates*/
 K_SEM_DEFINE(temp_sense_gate, 0, 1);
 K_SEM_DEFINE(mic_sense_gate, 0, 1);
+K_SEM_DEFINE(inference_gate, 0, 1);
 
 /*End Gates*/
 
@@ -19,6 +20,7 @@ enum ble_app_state {
 	CONNECTED,
 	TEMP_READ,
 	MIC_CAPTURE,
+	INFERING,
 	ERROR
 };
 
@@ -71,6 +73,9 @@ static enum smf_state_result connected_run(void *o)
 	if (so->events & EVENT_CENTRAL_DISCONNECTED) {
 		LOG_WRN("Go to connected State");
 		smf_set_state(SMF_CTX(&so->state_context), &ble_app_states[IDLE]);
+	} else if (so->events & EVENT_AUD_SENSE_STARTED) {
+		LOG_WRN("Go to MIC Capture State");
+		smf_set_state(SMF_CTX(&so->state_context), &ble_app_states[MIC_CAPTURE]);
 	}
 	return SMF_EVENT_HANDLED;
 }
@@ -95,13 +100,52 @@ static enum smf_state_result temp_read_run(void *o)
 // mic capture
 static void mic_capture_entry(void *o)
 {
-	LOG_WRN("Entered MIC_CAPTURE");
+	LOG_WRN("Entered MIC_CAPTURE"); 
+	k_sem_take(&inference_gate, K_NO_WAIT);
 }
 static enum smf_state_result mic_capture_run(void *o)
 {
-	smf_set_state(SMF_CTX(&state_object), &ble_app_states[MIC_CAPTURE]);
+
+	struct state_object *so = o;
+	if (so->events & EVENT_AUD_SENSE_END) {
+		LOG_WRN("Go to Infering State");
+		smf_set_state(SMF_CTX(&so->state_context), &ble_app_states[INFERING]);
+	}
 	return SMF_EVENT_HANDLED;
 }
+
+static void mic_capture_exit(void *o)
+{
+	LOG_WRN("Left MIC Capture");
+	k_sem_give(&inference_gate);
+	
+}
+
+
+
+static void infering_entry(void *o)
+{
+	LOG_WRN("Entered INFERING");
+	k_sem_take(&mic_sense_gate, K_NO_WAIT);
+}
+static enum smf_state_result infering_run(void *o)
+{
+	struct state_object *so = o;
+	if (so->events & EVENT_INFERENCE_END) {
+		LOG_WRN("Go to Connected State");
+		smf_set_state(SMF_CTX(&so->state_context), &ble_app_states[CONNECTED]);
+	}
+	return SMF_EVENT_HANDLED;
+}
+static void infering_exit(void *o)
+{
+	LOG_WRN("Left Infering");
+	k_sem_give(&mic_sense_gate);
+}
+
+
+
+
 
 // error state
 
@@ -122,7 +166,8 @@ static const struct smf_state ble_app_states[] = {
 	[IDLE] = SMF_CREATE_STATE(idle_entry, idle_run, idle_exit, NULL, NULL),
 	[CONNECTED] = SMF_CREATE_STATE(connected_entry, connected_run, connected_exit, NULL, NULL),
 	[TEMP_READ] = SMF_CREATE_STATE(temp_read_entry, temp_read_run, NULL, NULL, NULL),
-	[MIC_CAPTURE] = SMF_CREATE_STATE(mic_capture_entry, mic_capture_run, NULL, NULL, NULL),
+	[MIC_CAPTURE] = SMF_CREATE_STATE(mic_capture_entry, mic_capture_run, mic_capture_exit, NULL, NULL),
+	[INFERING] = SMF_CREATE_STATE(infering_entry, infering_run, infering_exit, NULL, NULL),
 	[ERROR] = SMF_CREATE_STATE(error_entry, error_run, NULL, NULL, NULL),
 };
 

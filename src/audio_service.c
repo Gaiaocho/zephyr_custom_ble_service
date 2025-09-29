@@ -1,6 +1,4 @@
-#include <stdio.h>
 #include <zephyr/logging/log.h>
-#include <arm_math.h>
 
 #include "audio_service.h"
 #include "fsm_service.h"
@@ -8,6 +6,9 @@
 LOG_MODULE_REGISTER(audio_module);
 
 K_MEM_SLAB_DEFINE_STATIC(mem_slab, BLOCK_SIZE, BLOCK_COUNT, 4);
+K_MEM_SLAB_DEFINE(inference_slab, BLOCK_SIZE, BLOCK_COUNT, 4);
+K_FIFO_DEFINE(infer_fifo);
+
 
 static const struct device *i2s_dev;
 
@@ -41,12 +42,19 @@ void audio_service_init()
 void audio_sense_thread(void *arg1, void *arg2, void *arg3)
 {
 	int ret;
+
 	while (1) {
 		/*Wait on a semaphore*/
 		k_sem_take(&mic_sense_gate, K_FOREVER);
 
+		/* Post an Event to FSM to show MIC capturing*/
+		fsm_post_event(EVENT_AUD_SENSE_STARTED);
+
+
+
 		/*Check the audio sense gate before working*/
 		void *mem_block;
+		void *infer_block;
 		uint32_t size;
 
 		ret = i2s_trigger(i2s_dev, I2S_DIR_RX, I2S_TRIGGER_START);
@@ -58,15 +66,17 @@ void audio_sense_thread(void *arg1, void *arg2, void *arg3)
 		LOG_WRN("SENSING AUDIO");
 		ret = i2s_read(i2s_dev, &mem_block, &size);
 		if (ret == 0) {
-			for (int b = 0; b < 3; b++) {
-				q31_t rms_q31;
-				int32_t *samples = mem_block;
-				/*Compute the RMS of the signals in the block*/
-				arm_rms_q31((q31_t *)samples, 4410, &rms_q31);
-				float rms_float = (float)rms_q31 / 2147483648.0f;
-				// to avoid unused error
-				(void)rms_float;
-				k_mem_slab_free(&mem_slab, (void *)mem_block);
+			for (int b = 1; b <= 3; b++) {
+				ret = k_mem_slab_alloc(&inference_slab, (void **)&infer_block,
+						       K_NO_WAIT);
+				if (ret == 0) {
+					memset(infer_block, 0, size); 
+					memcpy(infer_block, mem_block, size);
+					k_fifo_put(&infer_fifo, infer_block);
+					k_mem_slab_free(&mem_slab, (void *)mem_block);
+				} else {
+					LOG_ERR("Could not allocate Infer block (%d)", ret);
+				}
 			}
 
 		} else {
@@ -79,6 +89,8 @@ void audio_sense_thread(void *arg1, void *arg2, void *arg3)
 
 		// 4. Sleep before next cycle
 		k_sem_give(&mic_sense_gate);
+		//SEND A STATE EVENT TO TRIGGER FILTERING
+		fsm_post_event(EVENT_AUD_SENSE_END);
 		k_sleep(K_SECONDS(2));
 	}
 }
